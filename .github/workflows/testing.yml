@@ -7,7 +7,7 @@ jobs:
   zap_scan:
     runs-on: ubuntu-latest
     env:
-      TARGET_URL: ${{ secrets.SCAN_TARGET_URL }}  # staging URL secret
+      TARGET_URL: ${{ secrets.SCAN_TARGET_URL }}
 
     steps:
       - name: Checkout repo
