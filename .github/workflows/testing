@@ -1,1 +1,11 @@
+name: One-Off Scan
 
+on:
+  workflow_dispatch:   # manual trigger
+
+jobs:
+  scan_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say hello
+        run: echo "Hello, this workflow runs directly from GitHub!"
