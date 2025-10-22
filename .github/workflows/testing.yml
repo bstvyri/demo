@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
+  # === 1. ZAP Passive Scan ===
   zap_scan:
     runs-on: ubuntu-latest
     env:
@@ -20,14 +21,60 @@ jobs:
         uses: zaproxy/action-baseline@v0.9.0
         with:
           target: ${{ env.TARGET_URL }}
-          # remove rules_file_name for now if you don't have a .zap/rules.tsv
           cmd_options: '-r scan-reports/zap-report.html -J scan-reports/zap-report.json'
 
-      - name: List generated reports
-        run: ls -la scan-reports
-
-      - name: Upload scan reports as artifact
+      - name: Upload ZAP reports
         uses: actions/upload-artifact@v4
         with:
           name: zap-scan-reports
           path: scan-reports/**
+
+  # === 2. CodeQL Static Analysis ===
+  codeql_scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript,python # change to your app languages
+      - name: Build (optional)
+        run: |
+          npm ci || true
+          pip install -r requirements.txt || true
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v2
+
+  # === 3. Semgrep (extra SAST rules) ===
+  semgrep_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep SQLi rules
+        uses: returntocorp/semgrep-action@v2
+        with:
+          config: p/sql-injection, p/ci
+          output: semgrep-results.sarif
+      - name: Upload SARIF
+        uses: github/code-scanning-action/upload-sarif@v2
+        with:
+          sarif_file: semgrep-results.sarif
+
+  # === 4. Trivy (Dependencies & Secrets) ===
+  trivy_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          format: sarif
+          output: trivy-results.sarif
+      - name: Upload SARIF
+        uses: github/code-scanning-action/upload-sarif@v2
+        with:
+          sarif_file: trivy-results.sarif
