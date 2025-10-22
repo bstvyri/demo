@@ -3,9 +3,14 @@ name: Safe Website Scan
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   # === 1. ZAP Passive Scan ===
   zap_scan:
+    name: ZAP Passive Scan
     runs-on: ubuntu-latest
     env:
       TARGET_URL: ${{ secrets.SCAN_TARGET_URL }}
@@ -31,50 +36,75 @@ jobs:
 
   # === 2. CodeQL Static Analysis ===
   codeql_scan:
+    name: CodeQL Static Analysis
     runs-on: ubuntu-latest
     permissions:
-      actions: read
+      contents: read
       security-events: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
-          languages: javascript,python # change to your app languages
-      - name: Build (optional)
+          # adjust these languages to only those actually in your repo
+          languages: javascript   # e.g., remove python if not used
+
+      - name: Build (optional, required for some languages)
         run: |
           npm ci || true
-          pip install -r requirements.txt || true
+
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
 
   # === 3. Semgrep (extra SAST rules) ===
   semgrep_scan:
+    name: Semgrep SQL Injection Rules
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Run Semgrep SQLi rules
-        uses: returntocorp/semgrep-action@v2
+        uses: semgrep/semgrep-action@v1
         with:
-          config: p/sql-injection, p/ci
+          config: >-
+            p/ci
+            p/security-audit
+            p/sql-injection
           output: semgrep-results.sarif
-      - name: Upload SARIF
-        uses: github/code-scanning-action/upload-sarif@v2
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep-results.sarif
 
   # === 4. Trivy (Dependencies & Secrets) ===
   trivy_scan:
+    name: Trivy Dependencies & Secrets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Run Trivy scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.22.0
         with:
           scan-type: fs
           format: sarif
           output: trivy-results.sarif
-      - name: Upload SARIF
-        uses: github/code-scanning-action/upload-sarif@v2
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
